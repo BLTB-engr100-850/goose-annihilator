@@ -105,18 +105,128 @@ def plot_lines_and_closest_point(p1, d1, p2, d2, r1, r2, midpoint):
 
   plt.show()
 
-# Example usage:
-p1 = np.array([1, 2, 3])  # A point on line 1
-d1 = np.array([4, 5, 6])  # Direction vector of line 1
 
-p2 = np.array([7, 8, 9])  # A point on line 2
-d2 = np.array([10, 11, -12])  # Direction vector of line 2
+def screen_to_ray(x, y, FOV_h, FOV_v):
+  """ Convert screen space coordinates to ray direction in 3D. """
+  theta_x = (x * FOV_h) / 2
+  theta_y = (y * FOV_v) / 2
+  # Compute the direction vector
+  ray_dir = np.array([
+    np.sin(theta_x),
+    np.sin(theta_y),
+    np.cos(theta_x) * np.cos(theta_y)
+  ])
+  return ray_dir / np.linalg.norm(ray_dir)
 
-# Get the closest points on both lines
-r1, r2 = closest_points_on_lines(p1, d1, p2, d2)
+def compute_aim_angles(P_obj):
+  """ Compute the horizontal and vertical angles to aim the laser. """
+  x_obj, y_obj, z_obj = P_obj
+  theta_h = np.arctan2(y_obj, x_obj)
+  theta_v = np.arcsin(z_obj / np.linalg.norm(P_obj))
+  return np.degrees(theta_h), np.degrees(theta_v)
 
-# Find the midpoint of the closest points
-r_closest = midpoint(r1, r2)
+# Convert screen space coordinates to ray directions
+def screen_to_ray(x, y, FOV_h, FOV_v):
+  """ Convert screen space coordinates to ray direction in 3D. """
+  theta_x = (x * FOV_h) / 2
+  theta_y = (y * FOV_v) / 2
+  # Compute the direction vector
+  ray_dir = np.array([
+    np.sin(theta_x),
+    np.sin(theta_y),
+    np.cos(theta_x) * np.cos(theta_y)
+  ])
+  return ray_dir / np.linalg.norm(ray_dir)
 
-# Plot the lines and the closest points
-plot_lines_and_closest_point(p1, d1, p2, d2, r1, r2, r_closest)
+# Visualization function
+def visualize_scene(C1, C2, ray1, ray2, P_obj, laser_origin=np.array([0, 0, 0])):
+  """
+  Visualize the cameras, rays, laser, and object in 3D space.
+  
+  Parameters:
+  C1: numpy array, Camera 1 position
+  C2: numpy array, Camera 2 position
+  ray1: numpy array, direction of ray from Camera 1
+  ray2: numpy array, direction of ray from Camera 2
+  P_obj: numpy array, the 3D position of the object
+  laser_origin: numpy array, the position of the laser origin
+  """
+  fig = plt.figure()
+  ax = fig.add_subplot(111, projection='3d')
+
+  # Plot Camera 1
+  ax.scatter(C1[0], C1[1], C1[2], color='blue', s=100, label="Camera 1")
+  ax.text(C1[0], C1[1], C1[2], 'Camera 1', color='blue')
+
+  # Plot Camera 2
+  ax.scatter(C2[0], C2[1], C2[2], color='green', s=100, label="Camera 2")
+  ax.text(C2[0], C2[1], C2[2], 'Camera 2', color='green')
+
+  # Plot Laser Origin
+  ax.scatter(laser_origin[0], laser_origin[1], laser_origin[2], color='red', s=100, label="Laser Origin")
+  ax.text(laser_origin[0], laser_origin[1], laser_origin[2], 'Laser Origin', color='red')
+
+  # Plot Object
+  ax.scatter(P_obj[0], P_obj[1], P_obj[2], color='purple', s=200, label="Object")
+  ax.text(P_obj[0], P_obj[1], P_obj[2], 'Object', color='purple')
+
+  # Draw rays from Camera 1 to Object
+  t_values = np.linspace(0, 10, 100)
+  ray1_path = np.array([C1 + t * ray1 for t in t_values])
+  ax.plot(ray1_path[:, 0], ray1_path[:, 1], ray1_path[:, 2], color='blue', linestyle='--', label="Ray 1")
+
+  # Draw rays from Camera 2 to Object
+  ray2_path = np.array([C2 + t * ray2 for t in t_values])
+  ax.plot(ray2_path[:, 0], ray2_path[:, 1], ray2_path[:, 2], color='green', linestyle='--', label="Ray 2")
+
+  # Draw laser from origin to Object
+  laser_path = np.array([laser_origin + t * (P_obj - laser_origin) for t in np.linspace(0, 1, 100)])
+  ax.plot(laser_path[:, 0], laser_path[:, 1], laser_path[:, 2], color='red', label="Laser")
+
+  # Set plot limits
+  ax.set_xlim([-10, 10])
+  ax.set_ylim([-10, 10])
+  ax.set_zlim([-10, 10])
+
+  # Set labels
+  ax.set_xlabel('X')
+  ax.set_ylabel('Y')
+  ax.set_zlabel('Z')
+  
+  # Add legend
+  ax.legend()
+
+  # Show plot
+  plt.show()
+
+
+# Given FOV in degrees for horizontal and vertical
+FOV_h = 90  # horizontal FOV in degrees
+FOV_v = 60  # vertical FOV in degrees
+
+# Convert FOV to radians
+FOV_h = np.radians(FOV_h)
+FOV_v = np.radians(FOV_v)
+
+# Example values for camera positions
+C1 = np.array([-10, 0, 0])  # Camera 1 position
+C2 = np.array([10, 0, 0])  # Camera 2 position
+
+# Screen space coordinates from camera 1 and camera 2, in the range [-1, 1], so make sure to normalize for resolution
+x1, y1 = 0.5, 0  # From camera 1
+x2, y2 = -0.5, 0  # From camera 2
+
+# Convert screen coordinates to rays
+ray1 = screen_to_ray(x1, y1, FOV_h, FOV_v)
+ray2 = screen_to_ray(x2, y2, FOV_h, FOV_v)
+
+r1, r2 = closest_points_on_lines(C1, ray1, C2, ray2)
+P_obj = midpoint(r1, r2)
+
+# Compute aiming angles for the laser
+theta_h, theta_v = compute_aim_angles(P_obj)
+
+print("Horizontal angle to aim the laser:", theta_h)
+print("Vertical angle to aim the laser:", theta_v)
+
+visualize_scene(C1, C2, ray1, ray2, P_obj)
