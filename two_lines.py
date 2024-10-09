@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 def closest_points_on_lines(p1, d1, p2, d2):
   """
@@ -105,7 +104,6 @@ def plot_lines_and_closest_point(p1, d1, p2, d2, r1, r2, midpoint):
 
   plt.show()
 
-
 def screen_to_ray(x, y, FOV_h, FOV_v):
   """ Convert screen space coordinates to ray direction in 3D. """
   theta_x = (x * FOV_h) / 2
@@ -125,7 +123,6 @@ def compute_aim_angles(P_obj):
   theta_v = np.arcsin(z_obj / np.linalg.norm(P_obj))
   return np.degrees(theta_h), np.degrees(theta_v)
 
-# Convert screen space coordinates to ray directions
 def screen_to_ray(x, y, FOV_h, FOV_v):
   """ Convert screen space coordinates to ray direction in 3D. """
   theta_x = (x * FOV_h) / 2
@@ -138,7 +135,6 @@ def screen_to_ray(x, y, FOV_h, FOV_v):
   ])
   return ray_dir / np.linalg.norm(ray_dir)
 
-# Visualization function
 def visualize_scene(C1, C2, ray1, ray2, P_obj, laser_origin=np.array([0, 0, 0])):
   """
   Visualize the cameras, rays, laser, and object in 3D space.
