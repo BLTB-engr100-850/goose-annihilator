@@ -42,6 +42,6 @@ def main():
 
   # display the image
   sv.plot_image(annotated_image)
-  
+
 if(__name__ == "__main__"):
   main()

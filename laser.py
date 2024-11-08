@@ -195,34 +195,34 @@ def visualize_scene(C1, C2, ray1, ray2, P_obj, laser_origin=np.array([0, 0, 0]))
   # Show plot
   plt.show()
 
+if __name__ == "__main__":
+  # Given FOV in degrees for horizontal and vertical
+  FOV_h = 90  # horizontal FOV in degrees
+  FOV_v = 60  # vertical FOV in degrees
 
-# Given FOV in degrees for horizontal and vertical
-FOV_h = 90  # horizontal FOV in degrees
-FOV_v = 60  # vertical FOV in degrees
+  # Convert FOV to radians
+  FOV_h = np.radians(FOV_h)
+  FOV_v = np.radians(FOV_v)
 
-# Convert FOV to radians
-FOV_h = np.radians(FOV_h)
-FOV_v = np.radians(FOV_v)
+  # Example values for camera positions
+  C1 = np.array([-10, 0, 0])  # Camera 1 position
+  C2 = np.array([10, 0, 0])  # Camera 2 position
 
-# Example values for camera positions
-C1 = np.array([-10, 0, 0])  # Camera 1 position
-C2 = np.array([10, 0, 0])  # Camera 2 position
+  # Screen space coordinates from camera 1 and camera 2, in the range [-1, 1], so make sure to normalize for resolution
+  x1, y1 = 0.5, 0  # From camera 1
+  x2, y2 = -0.5, 0  # From camera 2
 
-# Screen space coordinates from camera 1 and camera 2, in the range [-1, 1], so make sure to normalize for resolution
-x1, y1 = 0.5, 0  # From camera 1
-x2, y2 = -0.5, 0  # From camera 2
+  # Convert screen coordinates to rays
+  ray1 = screen_to_ray(x1, y1, FOV_h, FOV_v)
+  ray2 = screen_to_ray(x2, y2, FOV_h, FOV_v)
 
-# Convert screen coordinates to rays
-ray1 = screen_to_ray(x1, y1, FOV_h, FOV_v)
-ray2 = screen_to_ray(x2, y2, FOV_h, FOV_v)
+  r1, r2 = closest_points_on_lines(C1, ray1, C2, ray2)
+  P_obj = midpoint(r1, r2)
 
-r1, r2 = closest_points_on_lines(C1, ray1, C2, ray2)
-P_obj = midpoint(r1, r2)
+  # Compute aiming angles for the laser
+  theta_h, theta_v = compute_aim_angles(P_obj)
 
-# Compute aiming angles for the laser
-theta_h, theta_v = compute_aim_angles(P_obj)
+  print("Horizontal angle to aim the laser:", theta_h)
+  print("Vertical angle to aim the laser:", theta_v)
 
-print("Horizontal angle to aim the laser:", theta_h)
-print("Vertical angle to aim the laser:", theta_v)
-
-visualize_scene(C1, C2, ray1, ray2, P_obj)
+  visualize_scene(C1, C2, ray1, ray2, P_obj)
