@@ -4,12 +4,14 @@ from inference import InferencePipeline
 from inference.core.interfaces.stream.sinks import render_boxes
 import numpy as np
 from scipy import linalg
-# from laser import compute_aim_angles
-# from arduino import send_command
+from arduino import send_command
 
-scale = 1
+scale = 1 # just use 1 for now, not sure if triangulation will work with different scales
 width = 1920*scale
 height = 1080*scale
+
+theta = 1135
+phi = 1135
 
 K1 = np.array([[575.2471989038615, 0.0, 922.7536420263076], [0.0, 575.2431210944071, 536.7506075573181], [0.0, 0.0, 1.0]])
 R1 = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
@@ -42,41 +44,52 @@ def DLT(point1, point2):
   return point
 
 def report_prediction(predictions, frame):
+  global theta
+  global phi
   if len(predictions['predictions']) > 0:
     cam1_predictions = []
     cam2_predictions = []
     for prediction in predictions['predictions']:
       x = prediction['x']
-      y = prediction['y']
-      w = prediction['width']
-      h = prediction['height']
-      confidence = prediction['confidence']
       if x < width:
         cam1_predictions.append(prediction)
       else:
         cam2_predictions.append(prediction)
-      # print(f"Prediction: x={x}, y={y}, w={w}, h={h}, confidence={round(confidence,2)}", end="\t")
-    # print()
-    # print(f"Cam1: {cam1_predictions}")
-    # print(f"Cam2: {cam2_predictions}")
     closest_pair = None
-    closest_distance = 1000000
+    closest_distance = np.Infinity
     for prediction1 in cam1_predictions:
       for prediction2 in cam2_predictions:
         x1 = prediction1['x']
         y1 = prediction1['y']
         x2 = prediction2['x'] - width
         y2 = prediction2['y']
-        distance = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+        dx = x1 - x2
+        dy = y1 - y2
+        distance = dx*dx + dy*dy
         if distance < closest_distance:
           closest_distance = distance
           closest_pair = (prediction1, prediction2)
     if closest_pair:
       # print(f"Closest pair: {closest_pair}")
-      point = DLT((closest_pair[0]['x']/scale, 1080-closest_pair[0]['y']/scale), (closest_pair[1]['x']/scale-1920, 1080-closest_pair[1]['y']/scale))
-      magnitude = (point[0]**2 + point[1]**2 + point[2]**2)**.5
-      print(point, magnitude)
-      
+      point = DLT((closest_pair[0]['x']/scale, closest_pair[0]['y']/scale), (closest_pair[1]['x']/scale-1920, closest_pair[1]['y']/scale))
+      # magnitude = (point[0]**2 + point[1]**2 + point[2]**2)**.5
+      # print(point, magnitude)
+      theta = np.arctan2(point[2], point[0])
+      phi = np.arctan2(point[1], point[2])
+      print(f"Theta: {theta}, Phi: {phi}")
+      theta /= 2
+      theta = int(1020 + theta * 1100 / (np.pi/2)) # converting to servo microseconds
+      phi = int(1135 + phi * 2000 / np.pi) # converting to servo microseconds
+      send_command(f"{theta} {phi} 1")
+      del cam1_predictions
+      del cam2_predictions
+    else:
+      send_command(f"{theta} {phi} 0")
+      pass
+  else:
+    send_command(f"{theta} {phi} 0")
+    pass
+  
   # print(predictions)
   render_boxes(predictions, frame)
 
