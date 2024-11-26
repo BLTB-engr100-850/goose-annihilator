@@ -3,9 +3,10 @@ from inference import InferencePipeline
 # Import the built in render_boxes sink for visualizing results
 from inference.core.interfaces.stream.sinks import render_boxes
 import numpy as np
-from scipy import linalg
 from arduino import send_command
 import cv2
+import os
+from inference_sdk import InferenceHTTPClient
 
 width = 1920
 height = 1080
@@ -23,37 +24,42 @@ R2 = np.array([[0.9999929809565761, -0.0008715335404560295, -0.00364396307181955
 T2 = np.array([[-0.06010748017172602], [-0.000491575908121739], [-0.002582041475289312]])
 P2 = K2 @ np.hstack((R2, T2.reshape(3, 1)))
 
-# def DLT(point1, point2):
-  
-#   A = [point1[1]*P1[2,:] - P1[1,:],
-#        P1[0,:] - point1[0]*P1[2,:],
-#        point2[1]*P2[2,:] - P2[1,:],
-#        P2[0,:] - point2[0]*P2[2,:]
-#       ]
-#   A = np.array(A).reshape((4,4))
+# make sure to run 'inference server start' in the terminal before running this script
+client = client = InferenceHTTPClient(
+  api_url="http://localhost:9001",
+  api_key=os.environ["ROBOFLOW_API_KEY"],
+)
 
-#   B = A.transpose() @ A
-#   U, s, Vh = linalg.svd(B, full_matrices = False)
-
-#   point = Vh[3,0:3]/Vh[3,3]
-#   point[0] += .03
-#   point[1] -= .0381
-#   point[2] -= 0.0034366
-#   return point
-
+def sub_sink(predictions, frame):
+  image = frame.image
+  coords = []
+  for prediction in predictions['predictions']:
+    w = prediction['width']
+    h = prediction['height']
+    x = prediction['x'] - w // 2
+    y = prediction['y'] - h // 2
+    x = int(x)
+    y = int(y)
+    w = int(w)
+    h = int(h)
+    result = client.infer(image[y:y+h, x:x+w], model_id="goose-m0dls/1")
+    for prediction in result['predictions']:
+      coords.append((prediction['x'] + x, prediction['y'] + y - prediction['height'] / 4))
+  return coords
+      
 def report_prediction(predictions, frame):
   global theta
   global phi
+  image = frame.image
   if len(predictions['predictions']) > 0:
     cam1_predictions = []
     cam2_predictions = []
-    for prediction in predictions['predictions']:
-      if prediction['class'] == 'goose-eye':
-        x = prediction['x']
-        if x < width:
-          cam1_predictions.append(prediction)
-        else:
-          cam2_predictions.append(prediction)
+    for coord in sub_sink(predictions, frame):
+      x, y = coord
+      if coord[0] < width:
+        cam1_predictions.append({'x': x, 'y': y})
+      else:
+        cam2_predictions.append({'x': x, 'y': y})
     closest_pair = None
     closest_distance = np.Infinity
     for prediction1 in cam1_predictions:
@@ -69,16 +75,13 @@ def report_prediction(predictions, frame):
           closest_distance = distance
           closest_pair = (prediction1, prediction2)
     if closest_pair:
-      # print(f"Closest pair: {closest_pair}")
-      # point = DLT((closest_pair[0]['x'], closest_pair[0]['y']), (closest_pair[1]['x']-1920, closest_pair[1]['y']))
+      cv2.circle(image, (int(closest_pair[0]['x']), int(closest_pair[0]['y'])), 5, (0, 0, 255), -1)
+      cv2.circle(image, (int(closest_pair[1]['x']), int(closest_pair[1]['y'])), 5, (0, 0, 255), -1)
+      print(closest_pair)
       point = cv2.triangulatePoints(P1, P2, (closest_pair[0]['x'], closest_pair[0]['y']), (closest_pair[1]['x']-1920, closest_pair[1]['y']))
-      laser_vec_desired = [point[0][0], point[1][0], point[2][0]]
-      laser_vec_desired[0] -= .03
-      laser_vec_desired[1] -= .0381
-      laser_vec_desired[2] += 0.0034366
+      laser_vec_desired = [point[0][0] - 0.3, point[1][0] - 0.381, point[2][0] + 0.0034366]
       magnitude = np.linalg.norm(laser_vec_desired)
       laser_vec_desired /= magnitude
-      # print(laser_vec_desired, magnitude)
       mirror_normal = (laser_vec_desired - np.array([0.99930814, 0.0277263, 0.02478897]))
       mirror_normal /= np.linalg.norm(mirror_normal)
       mirror_normal[0] = -mirror_normal[0]
@@ -96,14 +99,14 @@ def report_prediction(predictions, frame):
   else:
     send_command(f"{theta} {phi} 0")
   
-  # print(predictions)
-  render_boxes(predictions, frame)
+  image_small = cv2.resize(image, (int(width), int(height/2)))
+  cv2.imshow("Inference", image_small)
+  cv2.waitKey(1)
+  
 
 # initialize a pipeline object
 pipeline = InferencePipeline.init(
-  model_id="goose-m0dls/2", # Roboflow model to use
-  # model_id="pingpong-2/1", # Roboflow model to use
-  # model_id="face-detection-mik1i/21", # Roboflow model to use
+  model_id="geese-detector/2", # Roboflow model to use
   video_reference=0, # Path to video, device id (int, usually 0 for built in webcams), or RTSP stream url
   on_prediction=report_prediction, # Function to run after each prediction
   video_source_properties={

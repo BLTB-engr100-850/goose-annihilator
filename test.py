@@ -1,24 +1,63 @@
-import numpy as np
+from inference import InferencePipeline
+import inference.core.interfaces.camera.entities
+from inference.core.interfaces.stream.sinks import render_boxes
+import cv2
+import os
+from inference_sdk import InferenceHTTPClient
 
-desired_vec = np.array([0, -0.2, 1])
-desired_vec = desired_vec / np.linalg.norm(desired_vec)
+client = client = InferenceHTTPClient(
+    api_url="http://localhost:9001",
+    api_key=os.environ["ROBOFLOW_API_KEY"],
+)
 
-mirror_normal = (desired_vec - np.array([1, 0, 0]))
-# print(mirror_normal)
-mirror_normal = mirror_normal/np.linalg.norm(mirror_normal)
-print(mirror_normal)
-# theta = np.arctan2(mirror_normal[0], mirror_normal[2])
-# phi = np.arcsin(mirror_normal[1])
+def sink(predictions: dict, frame: inference.core.interfaces.camera.entities.VideoFrame):
+  image = frame.image
+  goose_images = []
+  for prediction in predictions['predictions']:
+    w = prediction['width']
+    h = prediction['height']
+    x = prediction['x'] - w // 2
+    y = prediction['y'] - h // 2
+    x = int(x)
+    y = int(y)
+    w = int(w)
+    h = int(h)
+    goose_images.append(((x,y),image[y:y+h, x:x+w]))
+  results = []
+  for goose_image in goose_images:
+    (x,y),goose_image = goose_image
+    result = client.infer(goose_image, model_id="goose-m0dls/1")
+    for prediction in result['predictions']:
+      prediction['x'] += x
+      prediction['y'] += y
+      w = prediction['width']
+      h = prediction['height']
+      x = prediction['x'] - w // 2
+      y = prediction['y'] - h // 2
+      x = int(x)
+      y = int(y)
+      w = int(w)
+      h = int(h)
+      cv2.rectangle(image, (x, y), (x+w, y+h), (0, 255, 0), 2)
+    results.append(result)
+  for result in results:
+    predictions = result['predictions']
+    for prediction in predictions:
+      x = prediction['x']
+      y = prediction['y']
+      y -= prediction['height'] / 4
+      x = int(x)
+      y = int(y)
+      cv2.circle(image, (x, y), 5, (0, 0, 255), -1)
+  cv2.imshow("Inference", image)
+  cv2.waitKey(1)
+    
 
-# theta = int(1020 + theta * 1100 / (np.pi/2)) # converting to servo microseconds
-# phi = int(1135 + phi * 2000 / np.pi) # converting to servo microseconds
-
-# print(theta, phi)
-v_out = np.array([.073279, -.63902, 3.82972017])
-v_out = v_out / np.linalg.norm(v_out)
-print(v_out)
-
-n = mirror_normal
-
-v_in = v_out - 2 * np.dot(v_out, n) * n
-print(v_in)
+# initialize a pipeline object
+pipeline = InferencePipeline.init(
+  model_id="geese-detector/2", # Roboflow model to use
+  video_reference="geese.mp4", # Path to video, device id (int, usually 0 for built in webcams), or RTSP stream url
+  on_prediction=sink, # Function to run after each prediction
+)
+pipeline.start()
+pipeline.join()
